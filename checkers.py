@@ -1,3 +1,5 @@
+
+
 import pygame
 import sys
 from pygame import gfxdraw
@@ -12,6 +14,7 @@ import requests
 import os
 import uuid
 from datetime import datetime
+import math
 
 # Firebase configuration - Replace with your actual Firebase config
 FIREBASE_API_KEY = "AIzaSyDJTMqDl-Vsq8Zl2LLlHCAUr2-cwgfuy6M"
@@ -42,6 +45,10 @@ GREEN = (50, 255, 50)
 GOLD = (255, 215, 0)
 GLOW_BLUE = (0, 200, 255, 100)
 PANEL_BG = (40, 40, 50)
+DARK_RED = (180, 30, 30)
+CREAM = (255, 248, 220)
+BROWN = (139, 69, 19)
+ORANGE = (255, 165, 0)
 
 # Fonts
 FONT_LARGE = pygame.font.SysFont('Arial', 48, bold=True)
@@ -234,33 +241,827 @@ class FirestoreAuth:
         except Exception as e:
             print(f"❌ Error updating stats: {e}")
             return False
+
+class AnimatedPiece:
+    """Animated checker piece for decorative purposes"""
+    def __init__(self, x, y, color, speed=1):
+        self.x = x
+        self.y = y
+        self.original_x = x
+        self.original_y = y
+        self.color = color
+        self.speed = speed
+        self.angle = random.uniform(0, 2 * math.pi)
+        self.radius = random.uniform(15, 25)
+        self.float_offset = 0
+        self.king = random.choice([True, False])
+        
+    def update(self):
+        """Update animation"""
+        self.angle += 0.02 * self.speed
+        self.float_offset = math.sin(self.angle) * 3
+        
+    def draw(self, win):
+        """Draw animated piece"""
+        # Draw shadow
+        shadow_x = int(self.x + 2)
+        shadow_y = int(self.y + self.float_offset + 2)
+        pygame.draw.circle(win, (0, 0, 0, 50), (shadow_x, shadow_y), int(self.radius))
+        
+        # Draw piece
+        piece_x = int(self.x)
+        piece_y = int(self.y + self.float_offset)
+        
+        # Gradient effect
+        for i in range(5, 0, -1):
+            shade = 20 * i
+            if self.color == RED:
+                draw_color = (min(255, self.color[0] + shade), 
+                             max(0, self.color[1] - shade), 
+                             max(0, self.color[2] - shade))
+            else:
+                draw_color = (min(255, self.color[0] + shade), 
+                             min(255, self.color[1] + shade), 
+                             min(255, self.color[2] + shade))
+            
+            pygame.draw.circle(win, draw_color, (piece_x, piece_y), int(self.radius - (5 - i)))
+        
+        # Draw outline
+        pygame.draw.circle(win, BLACK, (piece_x, piece_y), int(self.radius), 2)
+        
+        # Draw king crown if applicable
+        if self.king:
+            crown_radius = int(self.radius // 2)
+            pygame.draw.circle(win, GOLD, (piece_x, piece_y), crown_radius)
+            pygame.draw.circle(win, BLACK, (piece_x, piece_y), crown_radius, 1)
+
+class LoginScreen:
+    def __init__(self, win):
+        self.win = win
+        self.email_input = ""
+        self.password_input = ""
+        self.focus = "email"
+        self.error_message = ""
+        self.success_message = ""
+        self.firebase = FirestoreAuth()
+        self.mode = "login"  # login or register
+        
+        # Animation variables
+        self.animated_pieces = []
+        self.board_pattern = []
+        self.title_pulse = 0
+        self.create_background_elements()
+        
+    def create_background_elements(self):
+        """Create animated background elements"""
+        # Create checkerboard pattern
+        pattern_size = 40
+        for row in range(HEIGHT // pattern_size + 1):
+            pattern_row = []
+            for col in range(WIDTH // pattern_size + 1):
+                if (row + col) % 2 == 0:
+                    pattern_row.append(CREAM)
+                else:
+                    pattern_row.append(BROWN)
+            self.board_pattern.append(pattern_row)
+        
+        # Create floating animated pieces
+        for _ in range(12):
+            x = random.randint(50, WIDTH - 50)
+            y = random.randint(50, HEIGHT - 50)
+            color = random.choice([RED, WHITE])
+            speed = random.uniform(0.5, 1.5)
+            self.animated_pieces.append(AnimatedPiece(x, y, color, speed))
     
-    def create_game_session(self, game_id, game_data):
-        """Create a game session in Firestore"""
-        try:
-            url = f"{self.firestore_url}/games/{game_id}"
-            headers = {
-                "Authorization": f"Bearer {self.id_token}",
-                "Content-Type": "application/json"
-            }
+    def draw_background(self):
+        """Draw animated checkerboard background"""
+        # Fill with dark background
+        self.win.fill((20, 20, 30))
+        
+        # Draw subtle checkerboard pattern
+        pattern_size = 40
+        for row in range(len(self.board_pattern)):
+            for col in range(len(self.board_pattern[row])):
+                color = self.board_pattern[row][col]
+                # Make it very subtle
+                alpha_color = (color[0] // 8, color[1] // 8, color[2] // 8)
+                rect = pygame.Rect(col * pattern_size, row * pattern_size, pattern_size, pattern_size)
+                pygame.draw.rect(self.win, alpha_color, rect)
+        
+        # Draw animated pieces
+        for piece in self.animated_pieces:
+            piece.update()
+            piece.draw(self.win)
+        
+        # Draw decorative border
+        border_width = 5
+        pygame.draw.rect(self.win, GOLD, (0, 0, WIDTH, border_width))
+        pygame.draw.rect(self.win, GOLD, (0, HEIGHT - border_width, WIDTH, border_width))
+        pygame.draw.rect(self.win, GOLD, (0, 0, border_width, HEIGHT))
+        pygame.draw.rect(self.win, GOLD, (WIDTH - border_width, 0, border_width, HEIGHT))
+        
+    def draw(self):
+        """Draw login screen with enhanced design"""
+        # Draw animated background
+        self.draw_background()
+        
+        # Update title pulse
+        self.title_pulse += 0.05
+        
+        # Draw main title with enhanced effects
+        title_glow = (math.sin(self.title_pulse) + 1) / 2
+        title_color = (
+            int(50 + 150 * title_glow),
+            int(100 + 100 * title_glow),
+            255
+        )
+        
+        # Draw title shadow
+        shadow_text = FONT_LARGE.render("AI CHECKERS MASTER", True, (0, 0, 0))
+        shadow_rect = shadow_text.get_rect(center=(WIDTH//2 + 3, 103))
+        self.win.blit(shadow_text, shadow_rect)
+        
+        # Draw main title
+        title_text = FONT_LARGE.render("AI CHECKERS MASTER", True, title_color)
+        title_rect = title_text.get_rect(center=(WIDTH//2, 100))
+        
+        # Create enhanced glow effect
+        glow_surface = pygame.Surface((title_rect.width + 60, title_rect.height + 30), pygame.SRCALPHA)
+        for i in range(10, 0, -1):
+            alpha = int(30 * title_glow * (i / 10))
+            glow_color = (*title_color, alpha)
+            pygame.draw.rect(glow_surface, glow_color, 
+                           (30 - i*3, 15 - i*1.5, title_rect.width + i*6, title_rect.height + i*3), 
+                           border_radius=15)
+        self.win.blit(glow_surface, (title_rect.x - 30, title_rect.y - 15))
+        self.win.blit(title_text, title_rect)
+        
+        # Draw subtitle
+        subtitle_text = FONT_MEDIUM.render("🏆 Master the Game of Strategy 🏆", True, GOLD)
+        subtitle_rect = subtitle_text.get_rect(center=(WIDTH//2, 150))
+        self.win.blit(subtitle_text, subtitle_rect)
+        
+        # Draw decorative checkers pieces around title
+        piece_positions = [
+            (WIDTH//2 - 200, 100), (WIDTH//2 + 200, 100),
+            (WIDTH//2 - 150, 60), (WIDTH//2 + 150, 60)
+        ]
+        for i, (x, y) in enumerate(piece_positions):
+            color = RED if i % 2 == 0 else WHITE
+            # Animated rotation
+            offset_x = math.cos(self.title_pulse + i) * 5
+            offset_y = math.sin(self.title_pulse + i) * 3
             
-            payload = {
-                "fields": {
-                    "creator_id": {"stringValue": self.local_id},
-                    "creator_username": {"stringValue": game_data.get('creator_username', '')},
-                    "status": {"stringValue": "waiting"},
-                    "created_at": {"timestampValue": datetime.now().isoformat() + "Z"},
-                    "game_mode": {"stringValue": game_data.get('mode', 'online')},
-                    "current_turn": {"stringValue": "RED"}
-                }
-            }
+            # Draw piece
+            piece_x = int(x + offset_x)
+            piece_y = int(y + offset_y)
             
-            response = requests.patch(url, json=payload, headers=headers)
-            print(f"🎮 Game session created: {game_id}")
-            return response.ok
-        except Exception as e:
-            print(f"❌ Error creating game session: {e}")
-            return False
+            # Shadow
+            pygame.draw.circle(self.win, (0, 0, 0, 100), (piece_x + 2, piece_y + 2), 20)
+            
+            # Piece with gradient
+            for j in range(5, 0, -1):
+                shade = 15 * j
+                if color == RED:
+                    draw_color = (min(255, color[0] + shade), 
+                                 max(0, color[1] - shade), 
+                                 max(0, color[2] - shade))
+                else:
+                    draw_color = (min(255, color[0] + shade), 
+                                 min(255, color[1] + shade), 
+                                 min(255, color[2] + shade))
+                
+                pygame.draw.circle(self.win, draw_color, (piece_x, piece_y), 20 - (5 - j))
+            
+            pygame.draw.circle(self.win, BLACK, (piece_x, piece_y), 20, 2)
+            
+            # King crown
+            if i < 2:
+                pygame.draw.circle(self.win, GOLD, (piece_x, piece_y), 10)
+                pygame.draw.circle(self.win, BLACK, (piece_x, piece_y), 10, 1)
+        
+        # Draw mode toggle with enhanced styling
+        mode_text = "Login" if self.mode == "login" else "Register"
+        toggle_text = f"Switch to {('Register' if self.mode == 'login' else 'Login')}"
+        
+        toggle_button = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 180, 200, 35)
+        pygame.draw.rect(self.win, (70, 70, 90), toggle_button, border_radius=17)
+        pygame.draw.rect(self.win, BLUE, toggle_button, 2, border_radius=17)
+        
+        mode_toggle_text = FONT_SMALL.render(toggle_text, True, BLUE)
+        mode_toggle_rect = mode_toggle_text.get_rect(center=toggle_button.center)
+        self.win.blit(mode_toggle_text, mode_toggle_rect)
+        
+        # Draw enhanced login form
+        form_rect = pygame.Rect(WIDTH//2 - 180, HEIGHT//2 - 120, 360, 280)
+        
+        # Form background with gradient effect
+        form_surface = pygame.Surface((form_rect.width, form_rect.height), pygame.SRCALPHA)
+        for i in range(form_rect.height):
+            alpha = int(200 - (i / form_rect.height) * 50)
+            color = (50, 50, 70, alpha)
+            pygame.draw.rect(form_surface, color, (0, i, form_rect.width, 1))
+        
+        self.win.blit(form_surface, form_rect.topleft)
+        pygame.draw.rect(self.win, GOLD, form_rect, 3, border_radius=15)
+        
+        # Form title with icon
+        form_title = FONT_MEDIUM.render(f"👤 {mode_text}", True, WHITE)
+        form_title_rect = form_title.get_rect(center=(WIDTH//2, form_rect.y + 40))
+        self.win.blit(form_title, form_title_rect)
+        
+        # Email field with enhanced styling
+        email_label = FONT_SMALL.render("📧 Email Address:", True, WHITE)
+        self.win.blit(email_label, (form_rect.x + 30, form_rect.y + 80))
+        
+        email_rect = pygame.Rect(form_rect.x + 30, form_rect.y + 110, 300, 45)
+        
+        # Field background
+        field_color = (40, 40, 60) if self.focus != "email" else (60, 60, 80)
+        pygame.draw.rect(self.win, field_color, email_rect, border_radius=8)
+        
+        # Field border
+        border_color = BLUE if self.focus == "email" else LIGHT_GRAY
+        border_width = 3 if self.focus == "email" else 1
+        pygame.draw.rect(self.win, border_color, email_rect, border_width, border_radius=8)
+        
+        # Email text
+        display_email = self.email_input
+        if len(display_email) > 30:
+            display_email = display_email[:30] + "..."
+        
+        email_text = FONT_SMALL.render(display_email, True, WHITE)
+        self.win.blit(email_text, (email_rect.x + 15, email_rect.y + 12))
+        
+        # Cursor for email field
+        if self.focus == "email":
+            cursor_x = email_rect.x + 15 + email_text.get_width()
+            cursor_y1 = email_rect.y + 10
+            cursor_y2 = email_rect.y + 35
+            if int(time.time() * 2) % 2:  # Blinking cursor
+                pygame.draw.line(self.win, WHITE, (cursor_x, cursor_y1), (cursor_x, cursor_y2), 2)
+        
+        # Password field with enhanced styling
+        password_label = FONT_SMALL.render("🔒 Password:", True, WHITE)
+        self.win.blit(password_label, (form_rect.x + 30, form_rect.y + 170))
+        
+        password_rect = pygame.Rect(form_rect.x + 30, form_rect.y + 200, 300, 45)
+        
+        # Field background
+        field_color = (40, 40, 60) if self.focus != "password" else (60, 60, 80)
+        pygame.draw.rect(self.win, field_color, password_rect, border_radius=8)
+        
+        # Field border
+        border_color = BLUE if self.focus == "password" else LIGHT_GRAY
+        border_width = 3 if self.focus == "password" else 1
+        pygame.draw.rect(self.win, border_color, password_rect, border_width, border_radius=8)
+        
+        # Password text (asterisks)
+        password_display = "●" * len(self.password_input)
+        password_text = FONT_SMALL.render(password_display, True, WHITE)
+        self.win.blit(password_text, (password_rect.x + 15, password_rect.y + 12))
+        
+        # Cursor for password field
+        if self.focus == "password":
+            cursor_x = password_rect.x + 15 + password_text.get_width()
+            cursor_y1 = password_rect.y + 10
+            cursor_y2 = password_rect.y + 35
+            if int(time.time() * 2) % 2:  # Blinking cursor
+                pygame.draw.line(self.win, WHITE, (cursor_x, cursor_y1), (cursor_x, cursor_y2), 2)
+        
+        # Enhanced Login/Register button
+        button_rect = pygame.Rect(form_rect.x + 105, form_rect.y + 260, 150, 50)
+        
+        # Button gradient
+        button_surface = pygame.Surface((button_rect.width, button_rect.height), pygame.SRCALPHA)
+        for i in range(button_rect.height):
+            ratio = i / button_rect.height
+            color = (
+                int(BLUE[0] * (1 - ratio * 0.3)),
+                int(BLUE[1] * (1 - ratio * 0.3)),
+                int(BLUE[2] * (1 - ratio * 0.3))
+            )
+            pygame.draw.rect(button_surface, color, (0, i, button_rect.width, 1))
+        
+        self.win.blit(button_surface, button_rect.topleft)
+        pygame.draw.rect(self.win, WHITE, button_rect, 2, border_radius=25)
+        
+        # Button text
+        button_text = FONT_SMALL.render(f"🚀 {mode_text}", True, WHITE)
+        button_text_rect = button_text.get_rect(center=button_rect.center)
+        self.win.blit(button_text, button_text_rect)
+        
+        # Error message with enhanced styling
+        if self.error_message:
+            error_y = form_rect.bottom + 20
+            
+            # Split long error messages into multiple lines
+            words = self.error_message.split(' ')
+            lines = []
+            current_line = ""
+            
+            for word in words:
+                test_line = current_line + (" " if current_line else "") + word
+                if len(test_line) <= 45:
+                    current_line = test_line
+                else:
+                    if current_line:
+                        lines.append(current_line)
+                    current_line = word
+            
+            if current_line:
+                lines.append(current_line)
+            
+            # Draw error background
+            error_height = len(lines) * 25 + 10
+            error_bg = pygame.Rect(WIDTH//2 - 200, error_y - 5, 400, error_height)
+            pygame.draw.rect(self.win, (100, 20, 20, 200), error_bg, border_radius=10)
+            pygame.draw.rect(self.win, RED, error_bg, 2, border_radius=10)
+            
+            # Draw each line
+            for i, line in enumerate(lines):
+                error_text = FONT_SMALL.render(f"⚠️ {line}", True, RED)
+                error_rect = error_text.get_rect(center=(WIDTH//2, error_y + i * 25))
+                self.win.blit(error_text, error_rect)
+        
+        # Success message with enhanced styling
+        if self.success_message:
+            success_y = form_rect.bottom + 20
+            success_bg = pygame.Rect(WIDTH//2 - 200, success_y - 5, 400, 35)
+            pygame.draw.rect(self.win, (20, 100, 20, 200), success_bg, border_radius=10)
+            pygame.draw.rect(self.win, GREEN, success_bg, 2, border_radius=10)
+            
+            success_text = FONT_SMALL.render(f"✅ {self.success_message}", True, GREEN)
+            success_rect = success_text.get_rect(center=(WIDTH//2, success_y + 12))
+            self.win.blit(success_text, success_rect)
+        
+        # Firestore indicator with enhanced styling
+        firestore_bg = pygame.Rect(5, HEIGHT - 35, 250, 30)
+        pygame.draw.rect(self.win, (20, 60, 20, 150), firestore_bg, border_radius=15)
+        firestore_text = FONT_TINY.render("💾 Powered by Cloud Firestore", True, (100, 200, 100))
+        self.win.blit(firestore_text, (15, HEIGHT - 30))
+    
+    def handle_event(self, event):
+        """Handle user input events"""
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_pos = pygame.mouse.get_pos()
+            
+            # Check email field click
+            email_rect = pygame.Rect(WIDTH//2 - 150, HEIGHT//2 - 10, 300, 45)
+            if email_rect.collidepoint(mouse_pos):
+                self.focus = "email"
+            
+            # Check password field click
+            password_rect = pygame.Rect(WIDTH//2 - 150, HEIGHT//2 + 80, 300, 45)
+            if password_rect.collidepoint(mouse_pos):
+                self.focus = "password"
+            
+            # Check login/register button click
+            button_rect = pygame.Rect(WIDTH//2 - 75, HEIGHT//2 + 140, 150, 50)
+            if button_rect.collidepoint(mouse_pos):
+                return self.attempt_auth()
+            
+            # Check mode toggle click
+            mode_toggle_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 180, 200, 35)
+            if mode_toggle_rect.collidepoint(mouse_pos):
+                self.mode = "register" if self.mode == "login" else "login"
+                self.error_message = ""
+                self.success_message = ""
+        
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_TAB:
+                # Switch focus between fields
+                self.focus = "password" if self.focus == "email" else "email"
+            elif event.key == pygame.K_RETURN:
+                # Try to login/register on Enter key
+                return self.attempt_auth()
+            elif event.key == pygame.K_BACKSPACE:
+                # Handle backspace
+                if self.focus == "email":
+                    self.email_input = self.email_input[:-1]
+                else:
+                    self.password_input = self.password_input[:-1]
+            else:
+                # Add character to input (filter out non-printable characters)
+                if event.unicode.isprintable():
+                    if self.focus == "email":
+                        self.email_input += event.unicode
+                    else:
+                        self.password_input += event.unicode
+        
+        return None
+    
+    def attempt_auth(self):
+        """Verify login credentials or register new user"""
+        # Clear previous messages
+        self.error_message = ""
+        self.success_message = ""
+        
+        # Validate input
+        if not self.email_input.strip() or not self.password_input:
+            self.error_message = "Email and password cannot be empty"
+            return None
+        
+        email = self.email_input.strip().lower()
+        
+        # Basic email validation
+        if '@' not in email or '.' not in email.split('@')[-1]:
+            self.error_message = "Please enter a valid email address"
+            return None
+        
+        if len(self.password_input) < 6:
+            self.error_message = "Password must be at least 6 characters"
+            return None
+        
+        # Attempt authentication
+        if self.mode == "login":
+            success, message = self.firebase.sign_in(email, self.password_input)
+        else:  # register
+            success, message = self.firebase.sign_up(email, self.password_input)
+        
+        if success:
+            self.success_message = message
+            self.error_message = ""
+            # Get username from email (before the @)
+            username = email.split('@')[0]
+            print(f"🎉 Authentication successful for: {username}")
+            return username
+        else:
+            self.error_message = message
+            self.success_message = ""
+            return None
+
+class GameMenu:
+    def __init__(self, win, username, firebase_auth=None):
+        self.win = win
+        self.username = username
+        self.firebase_auth = firebase_auth
+        self.selected_option = 0
+        self.options = [
+            "Human vs Human",
+            "Human vs AI (Easy)",
+            "Human vs AI (Medium)",
+            "Human vs AI (Hard)",
+            "View Statistics",
+            "Logout"
+        ]
+        self.ai_difficulty = None
+        self.game_mode = None
+        self.show_stats = False
+        self.user_stats = None
+        
+        # Animation variables
+        self.menu_pulse = 0
+        self.floating_pieces = []
+        self.create_menu_decorations()
+    
+    def create_menu_decorations(self):
+        """Create decorative elements for menu"""
+        # Create floating pieces around the menu
+        for _ in range(8):
+            x = random.randint(50, WIDTH - 50)
+            y = random.randint(200, HEIGHT - 100)
+            color = random.choice([RED, WHITE])
+            speed = random.uniform(0.3, 0.8)
+            self.floating_pieces.append(AnimatedPiece(x, y, color, speed))
+    
+    def draw_background(self):
+        """Draw animated background for menu"""
+        # Gradient background
+        for y in range(HEIGHT):
+            ratio = y / HEIGHT
+            color = (
+                int(20 + ratio * 20),
+                int(20 + ratio * 30),
+                int(40 + ratio * 20)
+            )
+            pygame.draw.line(self.win, color, (0, y), (WIDTH, y))
+        
+        # Draw floating pieces
+        for piece in self.floating_pieces:
+            piece.update()
+            piece.draw(self.win)
+        
+        # Draw decorative checkerboard corners
+        corner_size = 60
+        for corner_x, corner_y in [(0, 0), (WIDTH - corner_size, 0), (0, HEIGHT - corner_size), (WIDTH - corner_size, HEIGHT - corner_size)]:
+            for row in range(corner_size // 10):
+                for col in range(corner_size // 10):
+                    if (row + col) % 2 == 0:
+                        color = BROWN
+                    else:
+                        color = CREAM
+                    
+                    # Make it subtle
+                    alpha_color = (color[0] // 4, color[1] // 4, color[2] // 4)
+                    rect = pygame.Rect(corner_x + col * 10, corner_y + row * 10, 10, 10)
+                    pygame.draw.rect(self.win, alpha_color, rect)
+    
+    def draw(self):
+        """Draw the game menu with enhanced design"""
+        # Draw animated background
+        self.draw_background()
+        
+        # Update animation
+        self.menu_pulse += 0.03
+        
+        if self.show_stats:
+            self.draw_stats()
+        else:
+            self.draw_menu()
+    
+    def draw_menu(self):
+        """Draw the main menu with enhanced styling"""
+        # Draw enhanced title
+        title_glow = (math.sin(self.menu_pulse) + 1) / 2
+        title_color = (
+            int(50 + 150 * title_glow),
+            int(100 + 100 * title_glow),
+            255
+        )
+        
+        # Title shadow
+        shadow_text = FONT_LARGE.render("AI CHECKERS MASTER", True, (0, 0, 0))
+        shadow_rect = shadow_text.get_rect(center=(WIDTH//2 + 3, 103))
+        self.win.blit(shadow_text, shadow_rect)
+        
+        # Main title
+        title_text = FONT_LARGE.render("AI CHECKERS MASTER", True, title_color)
+        title_rect = title_text.get_rect(center=(WIDTH//2, 100))
+        
+        # Enhanced glow effect
+        glow_surface = pygame.Surface((title_rect.width + 60, title_rect.height + 30), pygame.SRCALPHA)
+        for i in range(8, 0, -1):
+            alpha = int(40 * title_glow * (i / 8))
+            glow_color = (*title_color, alpha)
+            pygame.draw.rect(glow_surface, glow_color, 
+                           (30 - i*4, 15 - i*2, title_rect.width + i*8, title_rect.height + i*4), 
+                           border_radius=20)
+        self.win.blit(glow_surface, (title_rect.x - 30, title_rect.y - 15))
+        self.win.blit(title_text, title_rect)
+        
+        # Draw welcome message with crown
+        welcome_text = FONT_MEDIUM.render(f"👑 Welcome, {self.username}! 👑", True, GOLD)
+        welcome_rect = welcome_text.get_rect(center=(WIDTH//2, 180))
+        
+        # Welcome message background
+        welcome_bg = pygame.Rect(welcome_rect.x - 20, welcome_rect.y - 10, welcome_rect.width + 40, welcome_rect.height + 20)
+        pygame.draw.rect(self.win, (50, 50, 70, 150), welcome_bg, border_radius=15)
+        pygame.draw.rect(self.win, GOLD, welcome_bg, 2, border_radius=15)
+        
+        self.win.blit(welcome_text, welcome_rect)
+        
+        # Draw enhanced menu options
+        menu_rect = pygame.Rect(WIDTH//2 - 200, 230, 400, 420)
+        
+        # Menu background with gradient
+        menu_surface = pygame.Surface((menu_rect.width, menu_rect.height), pygame.SRCALPHA)
+        for i in range(menu_rect.height):
+            alpha = int(180 - (i / menu_rect.height) * 60)
+            color = (40, 40, 60, alpha)
+            pygame.draw.rect(menu_surface, color, (0, i, menu_rect.width, 1))
+        
+        self.win.blit(menu_surface, menu_rect.topleft)
+        pygame.draw.rect(self.win, GOLD, menu_rect, 3, border_radius=20)
+        
+        # Menu title
+        menu_title = FONT_MEDIUM.render("🎮 Game Modes", True, WHITE)
+        menu_title_rect = menu_title.get_rect(center=(WIDTH//2, menu_rect.y + 30))
+        self.win.blit(menu_title, menu_title_rect)
+        
+        # Draw menu options with enhanced styling
+        for i, option in enumerate(self.options):
+            option_rect = pygame.Rect(menu_rect.x + 30, menu_rect.y + 70 + i * 55, 340, 45)
+            
+            # Option background and highlighting
+            if i == self.selected_option:
+                # Animated selection
+                pulse = (math.sin(self.menu_pulse * 3) + 1) / 2
+                glow_alpha = int(100 + pulse * 50)
+                
+                # Selection glow
+                glow_rect = pygame.Rect(option_rect.x - 5, option_rect.y - 5, option_rect.width + 10, option_rect.height + 10)
+                pygame.draw.rect(self.win, (*BLUE, glow_alpha), glow_rect, border_radius=25)
+                
+                # Selection background
+                pygame.draw.rect(self.win, (70, 70, 100), option_rect, border_radius=22)
+                pygame.draw.rect(self.win, BLUE, option_rect, 3, border_radius=22)
+                text_color = WHITE
+            else:
+                # Normal background
+                pygame.draw.rect(self.win, (50, 50, 70), option_rect, border_radius=22)
+                pygame.draw.rect(self.win, LIGHT_GRAY, option_rect, 1, border_radius=22)
+                text_color = LIGHT_GRAY
+            
+            # Option icons and text
+            icons = ["👥", "🤖", "🧠", "🔥", "📊", "🚪"]
+            option_text = f"{icons[i]} {option}"
+            
+            text_surface = FONT_SMALL.render(option_text, True, text_color)
+            text_rect = text_surface.get_rect(center=option_rect.center)
+            self.win.blit(text_surface, text_rect)
+            
+            # Add difficulty indicators for AI modes
+            if "AI" in option:
+                difficulty_colors = {"Easy": GREEN, "Medium": ORANGE, "Hard": RED}
+                for diff, color in difficulty_colors.items():
+                    if diff in option:
+                        indicator_rect = pygame.Rect(option_rect.right - 40, option_rect.y + 5, 30, 35)
+                        pygame.draw.rect(self.win, color, indicator_rect, border_radius=15)
+                        break
+        
+        # Draw decorative elements
+        self.draw_menu_decorations()
+        
+        # Firestore indicator
+        firestore_bg = pygame.Rect(5, HEIGHT - 35, 280, 30)
+        pygame.draw.rect(self.win, (20, 60, 20, 150), firestore_bg, border_radius=15)
+        firestore_text = FONT_TINY.render("💾 Your progress saved in Cloud Firestore", True, (100, 200, 100))
+        self.win.blit(firestore_text, (15, HEIGHT - 30))
+    
+    def draw_menu_decorations(self):
+        """Draw decorative elements around the menu"""
+        # Draw animated checker pieces in corners
+        corner_pieces = [
+            (100, 300, RED), (WIDTH - 100, 300, WHITE),
+            (100, 500, WHITE), (WIDTH - 100, 500, RED)
+        ]
+        
+        for x, y, color in corner_pieces:
+            # Animated floating effect
+            offset_x = math.cos(self.menu_pulse + x/100) * 8
+            offset_y = math.sin(self.menu_pulse + y/100) * 5
+            
+            piece_x = int(x + offset_x)
+            piece_y = int(y + offset_y)
+            
+            # Shadow
+            pygame.draw.circle(self.win, (0, 0, 0, 80), (piece_x + 3, piece_y + 3), 25)
+            
+            # Piece with gradient
+            for j in range(6, 0, -1):
+                shade = 20 * j
+                if color == RED:
+                    draw_color = (min(255, color[0] + shade), 
+                                 max(0, color[1] - shade), 
+                                 max(0, color[2] - shade))
+                else:
+                    draw_color = (min(255, color[0] + shade), 
+                                 min(255, color[1] + shade), 
+                                 min(255, color[2] + shade))
+                
+                pygame.draw.circle(self.win, draw_color, (piece_x, piece_y), 25 - (6 - j))
+            
+            pygame.draw.circle(self.win, BLACK, (piece_x, piece_y), 25, 3)
+            
+            # King crown
+            pygame.draw.circle(self.win, GOLD, (piece_x, piece_y), 12)
+            pygame.draw.circle(self.win, BLACK, (piece_x, piece_y), 12, 2)
+    
+    def draw_stats(self):
+        """Draw user statistics with enhanced styling"""
+        # Back button with enhanced styling
+        back_rect = pygame.Rect(50, 150, 120, 50)
+        pygame.draw.rect(self.win, (70, 70, 90), back_rect, border_radius=25)
+        pygame.draw.rect(self.win, BLUE, back_rect, 3, border_radius=25)
+        
+        back_text = FONT_SMALL.render("← Back", True, WHITE)
+        back_text_rect = back_text.get_rect(center=back_rect.center)
+        self.win.blit(back_text, back_text_rect)
+        
+        # Stats panel with enhanced design
+        stats_rect = pygame.Rect(WIDTH//2 - 250, 200, 500, 400)
+        
+        # Stats background with gradient
+        stats_surface = pygame.Surface((stats_rect.width, stats_rect.height), pygame.SRCALPHA)
+        for i in range(stats_rect.height):
+            alpha = int(200 - (i / stats_rect.height) * 50)
+            color = (40, 40, 70, alpha)
+            pygame.draw.rect(stats_surface, color, (0, i, stats_rect.width, 1))
+        
+        self.win.blit(stats_surface, stats_rect.topleft)
+        pygame.draw.rect(self.win, GOLD, stats_rect, 4, border_radius=20)
+        
+        # Stats title
+        stats_title = FONT_MEDIUM.render("📊 Your Game Statistics", True, WHITE)
+        stats_title_rect = stats_title.get_rect(center=(WIDTH//2, 240))
+        self.win.blit(stats_title, stats_title_rect)
+        
+        if self.user_stats:
+            y_offset = 300
+            games = self.user_stats.get('games_played', 0)
+            wins = self.user_stats.get('wins', 0)
+            losses = self.user_stats.get('losses', 0)
+            win_rate = (wins / games * 100) if games > 0 else 0
+            
+            stats_items = [
+                ("🎮", "Games Played", str(games), BLUE),
+                ("🏆", "Victories", str(wins), GREEN),
+                ("💔", "Defeats", str(losses), RED),
+                ("📈", "Win Rate", f"{win_rate:.1f}%", GOLD)
+            ]
+            
+            for icon, label, value, color in stats_items:
+                # Stat item background
+                item_rect = pygame.Rect(stats_rect.x + 40, y_offset - 10, 420, 50)
+                pygame.draw.rect(self.win, (60, 60, 80, 150), item_rect, border_radius=15)
+                pygame.draw.rect(self.win, color, item_rect, 2, border_radius=15)
+                
+                # Icon
+                icon_text = FONT_MEDIUM.render(icon, True, color)
+                self.win.blit(icon_text, (item_rect.x + 20, item_rect.y + 10))
+                
+                # Label
+                label_text = FONT_SMALL.render(label, True, WHITE)
+                self.win.blit(label_text, (item_rect.x + 70, item_rect.y + 15))
+                
+                # Value
+                value_text = FONT_SMALL.render(value, True, color)
+                value_rect = value_text.get_rect(right=item_rect.right - 20, centery=item_rect.centery)
+                self.win.blit(value_text, value_rect)
+                
+                y_offset += 70
+            
+            # Achievement badges
+            if games >= 10:
+                badge_text = FONT_SMALL.render("🎖️ Veteran Player", True, GOLD)
+                badge_rect = badge_text.get_rect(center=(WIDTH//2, y_offset + 20))
+                self.win.blit(badge_text, badge_rect)
+            
+            if win_rate >= 70:
+                master_text = FONT_SMALL.render("👑 Checkers Master", True, GOLD)
+                master_rect = master_text.get_rect(center=(WIDTH//2, y_offset + 50))
+                self.win.blit(master_text, master_rect)
+                
+        else:
+            # Loading animation
+            loading_dots = "." * (int(time.time() * 2) % 4)
+            loading_text = FONT_SMALL.render(f"Loading your stats{loading_dots}", True, LIGHT_GRAY)
+            loading_rect = loading_text.get_rect(center=(WIDTH//2, 400))
+            self.win.blit(loading_text, loading_rect)
+    
+    def handle_event(self, event):
+        """Handle user input events"""
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_pos = pygame.mouse.get_pos()
+            
+            if self.show_stats:
+                # Back button
+                back_rect = pygame.Rect(50, 150, 120, 50)
+                if back_rect.collidepoint(mouse_pos):
+                    self.show_stats = False
+                    return None
+            else:
+                # Check if any menu option was clicked
+                menu_rect = pygame.Rect(WIDTH//2 - 200, 230, 400, 420)
+                for i, option in enumerate(self.options):
+                    option_rect = pygame.Rect(menu_rect.x + 30, menu_rect.y + 70 + i * 55, 340, 45)
+                    if option_rect.collidepoint(mouse_pos):
+                        return self.select_option(i)
+        
+        elif event.type == pygame.KEYDOWN:
+            if not self.show_stats:
+                if event.key == pygame.K_UP:
+                    self.selected_option = (self.selected_option - 1) % len(self.options)
+                elif event.key == pygame.K_DOWN:
+                    self.selected_option = (self.selected_option + 1) % len(self.options)
+                elif event.key == pygame.K_RETURN:
+                    return self.select_option(self.selected_option)
+            else:
+                if event.key == pygame.K_ESCAPE:
+                    self.show_stats = False
+        
+        return None
+    
+    def select_option(self, option_index):
+        """Handle menu option selection"""
+        selected = self.options[option_index]
+        
+        if selected == "Human vs Human":
+            self.game_mode = "human_vs_human"
+            return "start_game"
+        elif selected.startswith("Human vs AI"):
+            self.game_mode = "human_vs_ai"
+            if "Easy" in selected:
+                self.ai_difficulty = "easy"
+            elif "Medium" in selected:
+                self.ai_difficulty = "medium"
+            else:
+                self.ai_difficulty = "hard"
+            return "start_game"
+        elif selected == "View Statistics":
+            self.show_stats = True
+            # Load user stats
+            if self.firebase_auth:
+                self.user_stats = self.firebase_auth.get_user_profile()
+            return None
+        elif selected == "Logout":
+            return "logout"
+        
+        return None
+
+# [Rest of the classes remain the same - Piece, Board, Game, etc.]
+# I'll include the essential classes here for completeness
 
 class Piece:
     PADDING = 15
@@ -477,393 +1278,6 @@ class Board:
         
         return piece_value + king_value + position_value
 
-class LoginScreen:
-    def __init__(self, win):
-        self.win = win
-        self.email_input = ""
-        self.password_input = ""
-        self.focus = "email"
-        self.error_message = ""
-        self.success_message = ""
-        self.firebase = FirestoreAuth()
-        self.mode = "login"  # login or register
-        
-    def draw(self):
-        """Draw login screen"""
-        # Fill background
-        self.win.fill((30, 30, 40))
-        
-        # Draw title with glow effect
-        title_glow = (abs(pygame.math.Vector2(0, 1).rotate(pygame.time.get_ticks() / 10).y) + 1) / 2
-        title_color = (0, 150 + int(105 * title_glow), 255)
-        title_text = FONT_LARGE.render("AI CHECKERS MASTER", True, title_color)
-        title_rect = title_text.get_rect(center=(WIDTH//2, 100))
-        
-        # Create glow effect
-        glow_surface = pygame.Surface((title_rect.width + 40, title_rect.height + 20), pygame.SRCALPHA)
-        pygame.draw.rect(glow_surface, (0, 100, 150, 30), 
-                         (0, 0, title_rect.width + 40, title_rect.height + 20), 
-                         border_radius=10)
-        self.win.blit(glow_surface, (title_rect.x - 20, title_rect.y - 10))
-        self.win.blit(title_text, title_rect)
-        
-        # Draw mode toggle
-        mode_text = "Login" if self.mode == "login" else "Register"
-        mode_toggle_text = FONT_SMALL.render(f"Switch to {('Register' if self.mode == 'login' else 'Login')}", True, BLUE)
-        mode_toggle_rect = mode_toggle_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 180))
-        self.win.blit(mode_toggle_text, mode_toggle_rect)
-        
-        # Draw login form
-        form_rect = pygame.Rect(WIDTH//2 - 150, HEIGHT//2 - 100, 300, 250)
-        pygame.draw.rect(self.win, (50, 50, 60), form_rect, border_radius=10)
-        
-        # Form title
-        form_title = FONT_MEDIUM.render(mode_text, True, WHITE)
-        form_title_rect = form_title.get_rect(center=(WIDTH//2, form_rect.y + 30))
-        self.win.blit(form_title, form_title_rect)
-        
-        # Email field
-        email_label = FONT_SMALL.render("Email:", True, WHITE)
-        self.win.blit(email_label, (form_rect.x + 20, form_rect.y + 60))
-        
-        email_rect = pygame.Rect(form_rect.x + 20, form_rect.y + 90, 260, 40)
-        pygame.draw.rect(self.win, (30, 30, 40), email_rect, border_radius=5)
-        if self.focus == "email":
-            pygame.draw.rect(self.win, BLUE, email_rect, 2, border_radius=5)
-        else:
-            pygame.draw.rect(self.win, LIGHT_GRAY, email_rect, 1, border_radius=5)
-        
-        # Truncate email text if too long
-        display_email = self.email_input
-        if len(display_email) > 25:
-            display_email = display_email[:25] + "..."
-        
-        email_text = FONT_SMALL.render(display_email, True, WHITE)
-        self.win.blit(email_text, (email_rect.x + 10, email_rect.y + 10))
-        
-        # Password field
-        password_label = FONT_SMALL.render("Password:", True, WHITE)
-        self.win.blit(password_label, (form_rect.x + 20, form_rect.y + 140))
-        
-        password_rect = pygame.Rect(form_rect.x + 20, form_rect.y + 170, 260, 40)
-        pygame.draw.rect(self.win, (30, 30, 40), password_rect, border_radius=5)
-        if self.focus == "password":
-            pygame.draw.rect(self.win, BLUE, password_rect, 2, border_radius=5)
-        else:
-            pygame.draw.rect(self.win, LIGHT_GRAY, password_rect, 1, border_radius=5)
-        
-        # Show asterisks for password
-        password_display = "*" * len(self.password_input)
-        password_text = FONT_SMALL.render(password_display, True, WHITE)
-        self.win.blit(password_text, (password_rect.x + 10, password_rect.y + 10))
-        
-        # Login/Register button
-        button_rect = pygame.Rect(form_rect.x + 75, form_rect.y + 230, 150, 40)
-        pygame.draw.rect(self.win, BLUE, button_rect, border_radius=5)
-        button_text = FONT_SMALL.render(mode_text, True, WHITE)
-        button_text_rect = button_text.get_rect(center=button_rect.center)
-        self.win.blit(button_text, button_text_rect)
-        
-        # Error message
-        if self.error_message:
-            # Split long error messages into multiple lines
-            words = self.error_message.split(' ')
-            lines = []
-            current_line = ""
-            
-            for word in words:
-                test_line = current_line + (" " if current_line else "") + word
-                if len(test_line) <= 40:  # Max characters per line
-                    current_line = test_line
-                else:
-                    if current_line:
-                        lines.append(current_line)
-                    current_line = word
-            
-            if current_line:
-                lines.append(current_line)
-            
-            # Draw each line
-            for i, line in enumerate(lines):
-                error_text = FONT_SMALL.render(line, True, RED)
-                error_rect = error_text.get_rect(center=(WIDTH//2, form_rect.bottom + 30 + i * 25))
-                self.win.blit(error_text, error_rect)
-        
-        # Success message
-        if self.success_message:
-            success_text = FONT_SMALL.render(self.success_message, True, GREEN)
-            success_rect = success_text.get_rect(center=(WIDTH//2, form_rect.bottom + 30))
-            self.win.blit(success_text, success_rect)
-        
-        # Firestore indicator
-        firestore_text = FONT_TINY.render("💾 Using Cloud Firestore", True, (100, 200, 100))
-        self.win.blit(firestore_text, (10, HEIGHT - 25))
-    
-    def handle_event(self, event):
-        """Handle user input events"""
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos = pygame.mouse.get_pos()
-            
-            # Check email field click
-            email_rect = pygame.Rect(WIDTH//2 - 130, HEIGHT//2 - 10, 260, 40)
-            if email_rect.collidepoint(mouse_pos):
-                self.focus = "email"
-            
-            # Check password field click
-            password_rect = pygame.Rect(WIDTH//2 - 130, HEIGHT//2 + 70, 260, 40)
-            if password_rect.collidepoint(mouse_pos):
-                self.focus = "password"
-            
-            # Check login/register button click
-            button_rect = pygame.Rect(WIDTH//2 - 75, HEIGHT//2 + 130, 150, 40)
-            if button_rect.collidepoint(mouse_pos):
-                return self.attempt_auth()
-            
-            # Check mode toggle click
-            mode_toggle_rect = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 180, 200, 30)
-            if mode_toggle_rect.collidepoint(mouse_pos):
-                self.mode = "register" if self.mode == "login" else "login"
-                self.error_message = ""
-                self.success_message = ""
-        
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_TAB:
-                # Switch focus between fields
-                self.focus = "password" if self.focus == "email" else "email"
-            elif event.key == pygame.K_RETURN:
-                # Try to login/register on Enter key
-                return self.attempt_auth()
-            elif event.key == pygame.K_BACKSPACE:
-                # Handle backspace
-                if self.focus == "email":
-                    self.email_input = self.email_input[:-1]
-                else:
-                    self.password_input = self.password_input[:-1]
-            else:
-                # Add character to input (filter out non-printable characters)
-                if event.unicode.isprintable():
-                    if self.focus == "email":
-                        self.email_input += event.unicode
-                    else:
-                        self.password_input += event.unicode
-        
-        return None
-    
-    def attempt_auth(self):
-        """Verify login credentials or register new user"""
-        # Clear previous messages
-        self.error_message = ""
-        self.success_message = ""
-        
-        # Validate input
-        if not self.email_input.strip() or not self.password_input:
-            self.error_message = "Email and password cannot be empty"
-            return None
-        
-        email = self.email_input.strip().lower()
-        
-        # Basic email validation
-        if '@' not in email or '.' not in email.split('@')[-1]:
-            self.error_message = "Please enter a valid email address"
-            return None
-        
-        if len(self.password_input) < 6:
-            self.error_message = "Password must be at least 6 characters"
-            return None
-        
-        # Attempt authentication
-        if self.mode == "login":
-            success, message = self.firebase.sign_in(email, self.password_input)
-        else:  # register
-            success, message = self.firebase.sign_up(email, self.password_input)
-        
-        if success:
-            self.success_message = message
-            self.error_message = ""
-            # Get username from email (before the @)
-            username = email.split('@')[0]
-            print(f"🎉 Authentication successful for: {username}")
-            return username
-        else:
-            self.error_message = message
-            self.success_message = ""
-            return None
-
-class GameMenu:
-    def __init__(self, win, username, firebase_auth=None):
-        self.win = win
-        self.username = username
-        self.firebase_auth = firebase_auth
-        self.selected_option = 0
-        self.options = [
-            "Human vs Human",
-            "Human vs AI (Easy)",
-            "Human vs AI (Medium)",
-            "Human vs AI (Hard)",
-            "View Stats",
-            "Logout"
-        ]
-        self.ai_difficulty = None
-        self.game_mode = None
-        self.show_stats = False
-        self.user_stats = None
-    
-    def draw(self):
-        """Draw the game menu"""
-        # Fill background
-        self.win.fill((30, 30, 40))
-        
-        # Draw title with glow effect
-        title_glow = (abs(pygame.math.Vector2(0, 1).rotate(pygame.time.get_ticks() / 10).y) + 1) / 2
-        title_color = (0, 150 + int(105 * title_glow), 255)
-        title_text = FONT_LARGE.render("AI CHECKERS MASTER", True, title_color)
-        title_rect = title_text.get_rect(center=(WIDTH//2, 100))
-        
-        # Create glow effect
-        glow_surface = pygame.Surface((title_rect.width + 40, title_rect.height + 20), pygame.SRCALPHA)
-        pygame.draw.rect(glow_surface, (0, 100, 150, 30), 
-                         (0, 0, title_rect.width + 40, title_rect.height + 20), 
-                         border_radius=10)
-        self.win.blit(glow_surface, (title_rect.x - 20, title_rect.y - 10))
-        self.win.blit(title_text, title_rect)
-        
-        if self.show_stats:
-            self.draw_stats()
-        else:
-            self.draw_menu()
-    
-    def draw_menu(self):
-        """Draw the main menu"""
-        # Draw welcome message
-        welcome_text = FONT_MEDIUM.render(f"Welcome, {self.username}!", True, WHITE)
-        welcome_rect = welcome_text.get_rect(center=(WIDTH//2, 180))
-        self.win.blit(welcome_text, welcome_rect)
-        
-        # Draw menu options
-        menu_rect = pygame.Rect(WIDTH//2 - 150, 230, 300, 400)
-        pygame.draw.rect(self.win, (50, 50, 60), menu_rect, border_radius=10)
-        
-        for i, option in enumerate(self.options):
-            option_rect = pygame.Rect(menu_rect.x + 20, menu_rect.y + 20 + i * 60, 260, 50)
-            
-            # Highlight selected option
-            if i == self.selected_option:
-                pygame.draw.rect(self.win, BLUE, option_rect, border_radius=5)
-                text_color = WHITE
-            else:
-                pygame.draw.rect(self.win, (70, 70, 80), option_rect, border_radius=5)
-                text_color = LIGHT_GRAY
-            
-            option_text = FONT_SMALL.render(option, True, text_color)
-            option_text_rect = option_text.get_rect(center=option_rect.center)
-            self.win.blit(option_text, option_text_rect)
-        
-        # Firestore indicator
-        firestore_text = FONT_TINY.render("💾 Data stored in Cloud Firestore", True, (100, 200, 100))
-        self.win.blit(firestore_text, (10, HEIGHT - 25))
-    
-    def draw_stats(self):
-        """Draw user statistics"""
-        # Back button
-        back_rect = pygame.Rect(50, 150, 100, 40)
-        pygame.draw.rect(self.win, BLUE, back_rect, border_radius=5)
-        back_text = FONT_SMALL.render("← Back", True, WHITE)
-        back_text_rect = back_text.get_rect(center=back_rect.center)
-        self.win.blit(back_text, back_text_rect)
-        
-        # Stats panel
-        stats_rect = pygame.Rect(WIDTH//2 - 200, 200, 400, 300)
-        pygame.draw.rect(self.win, (50, 50, 60), stats_rect, border_radius=10)
-        
-        # Stats title
-        stats_title = FONT_MEDIUM.render("Your Statistics", True, WHITE)
-        stats_title_rect = stats_title.get_rect(center=(WIDTH//2, 230))
-        self.win.blit(stats_title, stats_title_rect)
-        
-        if self.user_stats:
-            y_offset = 280
-            stats_items = [
-                f"Games Played: {self.user_stats.get('games_played', 0)}",
-                f"Wins: {self.user_stats.get('wins', 0)}",
-                f"Losses: {self.user_stats.get('losses', 0)}",
-            ]
-            
-            # Calculate win rate
-            games = self.user_stats.get('games_played', 0)
-            wins = self.user_stats.get('wins', 0)
-            win_rate = (wins / games * 100) if games > 0 else 0
-            stats_items.append(f"Win Rate: {win_rate:.1f}%")
-            
-            for item in stats_items:
-                stat_text = FONT_SMALL.render(item, True, WHITE)
-                stat_rect = stat_text.get_rect(center=(WIDTH//2, y_offset))
-                self.win.blit(stat_text, stat_rect)
-                y_offset += 40
-        else:
-            loading_text = FONT_SMALL.render("Loading stats...", True, LIGHT_GRAY)
-            loading_rect = loading_text.get_rect(center=(WIDTH//2, 350))
-            self.win.blit(loading_text, loading_rect)
-    
-    def handle_event(self, event):
-        """Handle user input events"""
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos = pygame.mouse.get_pos()
-            
-            if self.show_stats:
-                # Back button
-                back_rect = pygame.Rect(50, 150, 100, 40)
-                if back_rect.collidepoint(mouse_pos):
-                    self.show_stats = False
-                    return None
-            else:
-                # Check if any menu option was clicked
-                menu_rect = pygame.Rect(WIDTH//2 - 150, 230, 300, 400)
-                for i, option in enumerate(self.options):
-                    option_rect = pygame.Rect(menu_rect.x + 20, menu_rect.y + 20 + i * 60, 260, 50)
-                    if option_rect.collidepoint(mouse_pos):
-                        return self.select_option(i)
-        
-        elif event.type == pygame.KEYDOWN:
-            if not self.show_stats:
-                if event.key == pygame.K_UP:
-                    self.selected_option = (self.selected_option - 1) % len(self.options)
-                elif event.key == pygame.K_DOWN:
-                    self.selected_option = (self.selected_option + 1) % len(self.options)
-                elif event.key == pygame.K_RETURN:
-                    return self.select_option(self.selected_option)
-            else:
-                if event.key == pygame.K_ESCAPE:
-                    self.show_stats = False
-        
-        return None
-    
-    def select_option(self, option_index):
-        """Handle menu option selection"""
-        selected = self.options[option_index]
-        
-        if selected == "Human vs Human":
-            self.game_mode = "human_vs_human"
-            return "start_game"
-        elif selected.startswith("Human vs AI"):
-            self.game_mode = "human_vs_ai"
-            if "Easy" in selected:
-                self.ai_difficulty = "easy"
-            elif "Medium" in selected:
-                self.ai_difficulty = "medium"
-            else:
-                self.ai_difficulty = "hard"
-            return "start_game"
-        elif selected == "View Stats":
-            self.show_stats = True
-            # Load user stats
-            if self.firebase_auth:
-                self.user_stats = self.firebase_auth.get_user_profile()
-            return None
-        elif selected == "Logout":
-            return "logout"
-        
-        return None
-
 class Game:
     def __init__(self, win, username=None, game_mode="human_vs_human", ai_difficulty=None, firebase_auth=None):
         self.win = win
@@ -898,7 +1312,7 @@ class Game:
         self.monte_carlo_total = 0
         self.monte_carlo_thread = None
         self.auto_monte_carlo = True
-        self.simulation_speed = 300  # Reduced for better performance
+        self.simulation_speed = 300
         
         # UI elements
         self.show_buttons = True
@@ -907,14 +1321,6 @@ class Game:
             "redo": pygame.Rect(BOARD_OFFSET_X + 110, HEIGHT - 100, 100, 40),
             "menu": pygame.Rect(WIDTH - 150, HEIGHT - 100, 100, 40)
         }
-        
-        # Game session tracking
-        if self.firebase_auth and self.game_mode != "human_vs_human":
-            self.game_id = str(uuid.uuid4())[:8]
-            self.firebase_auth.create_game_session(self.game_id, {
-                'creator_username': self.username,
-                'mode': self.game_mode
-            })
 
     def update(self):
         """Update the game display"""
@@ -1426,7 +1832,7 @@ class Game:
             self.win.blit(text, text_rect)
             
             # Draw restart prompt
-            restart_text = FONT_MEDIUM.render("Click to play again", True, WHITE)
+            restart_text = FONT_MEDIUM.render("🎮 Click to play again", True, WHITE)
             restart_rect = restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 60))
             self.win.blit(restart_text, restart_rect)
             
@@ -1797,19 +2203,23 @@ def main():
     sys.exit()
 
 if __name__ == "__main__":
-    print(" Starting AI Checkers Master with Cloud Firestore...")
-    print(" Firebase authentication enabled")
-    print(" AI opponents with 3 difficulty levels")
-    print(" Monte Carlo win probability analysis")
-    print(" Undo/Redo functionality")
-    print(" Data stored in Cloud Firestore")
-    print("\n" + "="*50)
-    print("CONTROLS:")
-    print("• Click pieces to select and move")
-    print("• Use Undo/Redo buttons during gameplay")
-    print("• ESC or Menu button to return to main menu")
-    print("• View Stats to see your game statistics")
-    print("="*50 + "\n")
+    print("🎮 Starting AI Checkers Master with Enhanced Design...")
+    print("✨ Beautiful animated UI with checkers theme")
+    print("📧 Firebase authentication enabled")
+    print("🤖 AI opponents with 3 difficulty levels")
+    print("🎯 Monte Carlo win probability analysis")
+    print("↩️ Undo/Redo functionality")
+    print("💾 Data stored in Cloud Firestore")
+    print("🎨 Enhanced visual design with animations")
+    print("\n" + "="*60)
+    print("FEATURES:")
+    print("• 🎭 Animated login screen with floating checkers pieces")
+    print("• 👑 Enhanced menu with beautiful checkers theme")
+    print("• 📊 Detailed statistics tracking")
+    print("• 🏆 Achievement badges for veteran players")
+    print("• ✨ Smooth animations and visual effects")
+    print("• 🎮 Professional game interface")
+    print("="*60 + "\n")
     
     try:
         main()
