@@ -17,8 +17,8 @@ from datetime import datetime
 import math
 
 # Firebase configuration - Replace with your actual Firebase config
-FIREBASE_API_KEY = "AIzaSyDJTMqDl-Vsq8Zl2LLlHCAUr2-cwgfuy6M"
-FIREBASE_AUTH_URL = "https://identitytoolkit.googleapis.com/v1/accounts"
+FIREBASE_API_KEY = "Api key"
+FIREBASE_AUTH_URL = "url"
 FIREBASE_PROJECT_ID = "ai-checkers-master"  # Replace with your project ID
 FIRESTORE_URL = f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/databases/(default)/documents"
 
